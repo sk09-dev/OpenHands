@@ -184,6 +184,21 @@ class MockLLMHandler(BaseHTTPRequestHandler):
                 self._send_json(200, raw)
             return
 
+        # ── Auto-title request ──
+        # agent-server >= 1.54 (AutoTitleSubscriber) asks the conversation's
+        # LLM for a title on every first user message. Left to TestLLM it
+        # would eat the first scripted turn: the title helper discards tool
+        # calls, so the conversation's own completion then gets the final
+        # reply and the tool never runs. Answer it with a fixed title and keep
+        # it out of the request history, like the pre-flight ping.
+        if _is_title_request(body):
+            raw = _title_reply(body.get("model"))
+            if body.get("stream"):
+                self._send_streaming(raw)
+            else:
+                self._send_json(200, raw)
+            return
+
         # Append to request history for test verification.
         # Tests can GET /admin/requests to confirm image content was included.
         with self._lock:
@@ -398,6 +413,47 @@ def _message_text(message: dict) -> str | None:
             if isinstance(part, dict) and part.get("type") == "text"
         )
     return content.strip() if isinstance(content, str) else None
+
+
+TITLE_PROMPT_PREFIX = (
+    "You are a helpful assistant that generates concise, descriptive titles"
+)
+
+
+def _is_title_request(body: dict) -> bool:
+    """Match the agent-server's auto-title completion.
+
+    ``openhands.sdk.conversation.title_utils`` sends a fixed system prompt
+    beginning with TITLE_PROMPT_PREFIX followed by one user message; no tools
+    are offered. Matching the system prompt keeps ordinary conversations,
+    whose system prompt is the agent's, on the scripted trajectory.
+    """
+    messages = body.get("messages")
+    if not isinstance(messages, list) or len(messages) != 2:
+        return False
+    system = messages[0]
+    if not isinstance(system, dict) or system.get("role") != "system":
+        return False
+    text = _message_text(system)
+    return isinstance(text, str) and text.startswith(TITLE_PROMPT_PREFIX)
+
+
+def _title_reply(model: str | None) -> dict:
+    """Minimal OpenAI-style completion carrying a fixed conversation title."""
+    return {
+        "id": "chatcmpl-mock-title",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model or "mock-title",
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": "Mock LLM conversation"},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
 
 
 def _preflight_pong(model: str | None) -> dict:
