@@ -38,6 +38,10 @@ REPLY_TOKEN = "MOCK_LLM_E2E_REPLY_OK"
 # _is_preflight_ping() so the check never touches the scripted trajectory.
 PREFLIGHT_PING_TEXT = "ping"
 
+# Token counts stamped on every scripted completion (see the handler).
+SCRIPTED_PROMPT_TOKENS = 10
+SCRIPTED_COMPLETION_TOKENS = 5
+
 # SDK exception → (HTTP status, OpenAI error type)
 ERROR_MAP: dict[type, tuple[int, str]] = {
     LLMAuthenticationError: (401, "invalid_api_key"),
@@ -219,6 +223,18 @@ class MockLLMHandler(BaseHTTPRequestHandler):
             return
 
         raw = response.raw_response.model_dump()
+
+        # TestLLM's scripted completions carry no token counts. Give every
+        # completion a fixed, non-zero usage so tests that assert on billing
+        # (the harness adapters read the agent-server's accumulated metrics)
+        # have something to bill, and can predict the exact total.
+        usage = raw.get("usage") or {}
+        if not usage.get("prompt_tokens") and not usage.get("completion_tokens"):
+            raw["usage"] = {
+                "prompt_tokens": SCRIPTED_PROMPT_TOKENS,
+                "completion_tokens": SCRIPTED_COMPLETION_TOKENS,
+                "total_tokens": SCRIPTED_PROMPT_TOKENS + SCRIPTED_COMPLETION_TOKENS,
+            }
 
         if body.get("stream"):
             stream_options = body.get("stream_options") or {}
