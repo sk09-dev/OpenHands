@@ -160,6 +160,71 @@ describe("backend-registry storage", () => {
     expect(readStoredBackends()).toEqual([]);
   });
 
+  it("seeds the default backend under the name the launcher injected", () => {
+    vi.stubEnv("VITE_BACKEND_BASE_URL", "http://localhost:9000");
+    vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");
+    (
+      window as unknown as Record<string, unknown>
+    ).__AGENT_CANVAS_DEFAULT_BACKEND_NAME__ = "DigitalOcean";
+    try {
+      window.localStorage.setItem(BACKENDS_STORAGE_KEY, JSON.stringify([]));
+
+      const result = readStoredBackends();
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: "default-local",
+        name: "DigitalOcean",
+        kind: "local",
+      });
+    } finally {
+      delete (window as unknown as Record<string, unknown>)
+        .__AGENT_CANVAS_DEFAULT_BACKEND_NAME__;
+    }
+  });
+
+  it("renames a stored seeded backend that still carries the stock name, and leaves a user's name alone", () => {
+    vi.stubEnv("VITE_BACKEND_BASE_URL", "http://localhost:9000");
+    vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");
+    (
+      window as unknown as Record<string, unknown>
+    ).__AGENT_CANVAS_DEFAULT_BACKEND_NAME__ = "DigitalOcean";
+    try {
+      // Stock name from an earlier launch: follows the launcher.
+      window.localStorage.setItem(
+        BACKENDS_STORAGE_KEY,
+        JSON.stringify([
+          {
+            id: "default-local",
+            name: "Local",
+            host: "http://localhost:9000",
+            apiKey: "fresh-session-key",
+            kind: "local",
+          },
+        ]),
+      );
+      expect(readStoredBackends()[0]).toMatchObject({ name: "DigitalOcean" });
+
+      // A name the user typed in: kept.
+      window.localStorage.setItem(
+        BACKENDS_STORAGE_KEY,
+        JSON.stringify([
+          {
+            id: "default-local",
+            name: "my laptop",
+            host: "http://localhost:9000",
+            apiKey: "fresh-session-key",
+            kind: "local",
+          },
+        ]),
+      );
+      expect(readStoredBackends()[0]).toMatchObject({ name: "my laptop" });
+    } finally {
+      delete (window as unknown as Record<string, unknown>)
+        .__AGENT_CANVAS_DEFAULT_BACKEND_NAME__;
+    }
+  });
+
   it("re-seeds the default Local backend when storage holds an empty array and launcher details are available", () => {
     vi.stubEnv("VITE_BACKEND_BASE_URL", "http://localhost:9000");
     vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");

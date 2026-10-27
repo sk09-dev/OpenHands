@@ -1,4 +1,5 @@
 import {
+  DEFAULT_LOCAL_BACKEND_NAME,
   SEEDED_DEFAULT_BACKEND_ID,
   makeDefaultLocalBackend,
   makeLockedCloudBackend,
@@ -77,12 +78,21 @@ function syncLauncherDefaultLocalBackend(backends: Backend[]): Backend[] {
       return backend;
     }
 
-    if (backend.apiKey === defaultBackend.apiKey) return backend;
+    // The launcher's name applies while the entry still carries the stock
+    // name (or an earlier launcher name); a name the user typed in stays.
+    const nameIsLauncherOwned =
+      backend.name === DEFAULT_LOCAL_BACKEND_NAME ||
+      backend.name === defaultBackend.name;
+    const nextName = nameIsLauncherOwned ? defaultBackend.name : backend.name;
+    if (backend.apiKey === defaultBackend.apiKey && backend.name === nextName) {
+      return backend;
+    }
 
     didSync = true;
     return {
       ...backend,
       apiKey: defaultBackend.apiKey,
+      name: nextName,
     };
   });
 

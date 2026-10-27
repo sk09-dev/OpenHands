@@ -8,6 +8,7 @@ import {
   getAgentServerWorkingDir,
   getCookieAuthCloudHost,
   getLockedCloudAuthMode,
+  getDefaultBackendName,
   getLockedCloudHost,
   isAuthRequired,
   isSameCloudHost,
@@ -30,6 +31,8 @@ afterEach(() => {
     .__AGENT_CANVAS_SESSION_API_KEY__;
   delete (window as unknown as Record<string, unknown>)
     .__AGENT_CANVAS_LOCK_TO_CLOUD__;
+  delete (window as unknown as Record<string, unknown>)
+    .__AGENT_CANVAS_DEFAULT_BACKEND_NAME__;
   Object.defineProperty(window, "location", {
     configurable: true,
     value: ORIGINAL_LOCATION,
@@ -87,6 +90,38 @@ function setInjectedCloudHost(value: unknown) {
     window as unknown as Record<string, unknown>
   ).__AGENT_CANVAS_LOCK_TO_CLOUD__ = value;
 }
+
+describe("getDefaultBackendName", () => {
+  const setInjectedName = (value: unknown) => {
+    (
+      window as unknown as Record<string, unknown>
+    ).__AGENT_CANVAS_DEFAULT_BACKEND_NAME__ = value;
+  };
+
+  it("returns null when nothing names the seeded backend", () => {
+    expect(getDefaultBackendName()).toBeNull();
+  });
+
+  it("uses VITE_DEFAULT_BACKEND_NAME when it is provided", () => {
+    vi.stubEnv("VITE_DEFAULT_BACKEND_NAME", " Baked ");
+    setInjectedName("Injected");
+
+    expect(getDefaultBackendName()).toBe("Baked");
+  });
+
+  it("falls back to the runtime-injected name", () => {
+    setInjectedName("DigitalOcean");
+
+    expect(getDefaultBackendName()).toBe("DigitalOcean");
+  });
+
+  it("treats a blank or non-string injected value as unset", () => {
+    setInjectedName("   ");
+    expect(getDefaultBackendName()).toBeNull();
+    setInjectedName(42);
+    expect(getDefaultBackendName()).toBeNull();
+  });
+});
 
 describe("getLockedCloudHost", () => {
   it("returns null when no Cloud lock is configured", () => {

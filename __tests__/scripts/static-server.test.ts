@@ -210,6 +210,21 @@ describe("static-server.mjs", () => {
       expect(config.disableTelemetry).toBe(false);
     });
 
+    it("defaults defaultBackendName to null", () => {
+      const config = parseArgs([]);
+      expect(config.defaultBackendName).toBeNull();
+    });
+
+    it("parses --default-backend-name", () => {
+      const config = parseArgs(["--default-backend-name", "DigitalOcean"]);
+      expect(config.defaultBackendName).toBe("DigitalOcean");
+    });
+
+    it("treats empty string as null for defaultBackendName", () => {
+      const config = parseArgs(["--default-backend-name", ""]);
+      expect(config.defaultBackendName).toBeNull();
+    });
+
     it("parses --disable-telemetry", () => {
       const config = parseArgs(["--disable-telemetry"], {});
       expect(config.disableTelemetry).toBe(true);
@@ -589,6 +604,61 @@ describe("static-server.mjs", () => {
     });
   });
 
+  describe("default-backend-name injection", () => {
+    it("exposes the name on window.__AGENT_CANVAS_DEFAULT_BACKEND_NAME__", async () => {
+      const buildDir = mkdtempSync(path.join(tmpdir(), "agent-canvas-build-"));
+      tempDirs.push(buildDir);
+      writeFileSync(
+        path.join(buildDir, "index.html"),
+        "<html><head></head><body>app</body></html>",
+      );
+      const server = await startStaticServer({
+        port: 0,
+        host: "127.0.0.1",
+        dir: buildDir,
+        routes: {},
+        defaultBackendName: "DigitalOcean",
+      });
+      servers.push(server);
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Static server did not bind to a TCP port");
+      }
+      const body = await (
+        await fetch(`http://127.0.0.1:${address.port}/`)
+      ).text();
+
+      expect(body).toContain("window.__AGENT_CANVAS_DEFAULT_BACKEND_NAME__");
+      expect(body).toContain('"DigitalOcean"');
+    });
+
+    it("injects nothing for the name when it is not set", async () => {
+      const buildDir = mkdtempSync(path.join(tmpdir(), "agent-canvas-build-"));
+      tempDirs.push(buildDir);
+      writeFileSync(
+        path.join(buildDir, "index.html"),
+        "<html><head></head><body>app</body></html>",
+      );
+      const server = await startStaticServer({
+        port: 0,
+        host: "127.0.0.1",
+        dir: buildDir,
+        routes: {},
+        lockToCloud: "https://cloud.example.com",
+      });
+      servers.push(server);
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Static server did not bind to a TCP port");
+      }
+      const body = await (
+        await fetch(`http://127.0.0.1:${address.port}/`)
+      ).text();
+
+      expect(body).not.toContain("__AGENT_CANVAS_DEFAULT_BACKEND_NAME__");
+    });
+  });
+
   describe("disable-telemetry injection", () => {
     async function startServerWithDisabledTelemetry(dir: string) {
       const origin = await startServer(dir, { disableTelemetry: true });
@@ -792,7 +862,9 @@ describe("static-server.mjs", () => {
 
       try {
         const server = await startStaticServer({
-          ...parseArgs(["--host", "0.0.0.0"], { SESSION_API_KEY: "lan-secret" }),
+          ...parseArgs(["--host", "0.0.0.0"], {
+            SESSION_API_KEY: "lan-secret",
+          }),
           port: 0,
           dir: buildDir,
         });

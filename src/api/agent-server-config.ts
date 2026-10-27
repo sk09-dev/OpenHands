@@ -12,6 +12,7 @@ export interface AgentServerFormDefaults {
 // server (`scripts/static-server.mjs`) and its tests reference the literal
 // string directly, not this constant.
 const LOCK_TO_CLOUD_WINDOW_KEY = "__AGENT_CANVAS_LOCK_TO_CLOUD__";
+const DEFAULT_BACKEND_NAME_WINDOW_KEY = "__AGENT_CANVAS_DEFAULT_BACKEND_NAME__";
 const LEGACY_CLOUD_DOMAIN = "all-hands.dev";
 const CURRENT_CLOUD_DOMAIN = "openhands.dev";
 const LEGACY_PRODUCTION_APP_HOST = `app.${LEGACY_CLOUD_DOMAIN}`;
@@ -176,6 +177,30 @@ export function isSameCloudHost(
 
 export function getLockedCloudAuthMode(): LockedCloudAuthMode {
   return getCookieAuthCloudHost() ? "cookie" : "api-key";
+}
+
+/**
+ * Display name the deployment host wants for the backend seeded for this
+ * origin (`makeDefaultLocalBackend()`), or null for the stock "Local".
+ *
+ * Two sources, in order: `VITE_DEFAULT_BACKEND_NAME` baked at build time, then
+ * `window.__AGENT_CANVAS_DEFAULT_BACKEND_NAME__` injected at serve time by
+ * `scripts/static-server.mjs --default-backend-name <name>`. A hosted setup
+ * that fronts its own agent-server can thus show its own name in the backend
+ * list without the user relabelling the entry in every browser.
+ */
+export function getDefaultBackendName(): string | null {
+  const envName = trimToNull(import.meta.env.VITE_DEFAULT_BACKEND_NAME);
+  if (envName) return envName;
+  if (typeof window !== "undefined") {
+    const injected = (window as unknown as Record<string, unknown>)[
+      DEFAULT_BACKEND_NAME_WINDOW_KEY
+    ];
+    if (typeof injected === "string") {
+      return trimToNull(injected);
+    }
+  }
+  return null;
 }
 
 export function getAgentServerBaseUrl(): string | null {

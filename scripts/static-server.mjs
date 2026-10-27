@@ -98,6 +98,7 @@ export function parseArgs(argv = process.argv.slice(2), env = process.env) {
     allowLanSessionKey: false,
     runtimeServicesInfo: null,
     lockToCloud: null,
+    defaultBackendName: env.AGENT_CANVAS_DEFAULT_BACKEND_NAME || null,
     basePath: "/",
     vscodeBasePath: null,
     // Also settable via the --disable-telemetry flag below.
@@ -142,6 +143,9 @@ export function parseArgs(argv = process.argv.slice(2), env = process.env) {
         break;
       case "--lock-to-cloud":
         config.lockToCloud = argv[++i] || null;
+        break;
+      case "--default-backend-name":
+        config.defaultBackendName = argv[++i] || null;
         break;
       case "--base-path":
         config.basePath = normalizeBasePath(argv[++i]);
@@ -277,6 +281,13 @@ OPTIONS:
   --lock-to-cloud <cloud-url>  Lock backend setup to a single OpenHands Cloud
                                URL. Hides manual/local backend setup and the
                                custom Cloud URL field in the pre-built frontend.
+  --default-backend-name <name>
+                               Display name for the backend the frontend seeds
+                               for this origin when a session key is injected
+                               (default: "Local"). For hosted setups that want
+                               their own name in the backend list, e.g. the
+                               provider running the agent-server. Also read
+                               from AGENT_CANVAS_DEFAULT_BACKEND_NAME.
   --disable-telemetry          Disable all product telemetry (including the
                                anonymous install event) in the pre-built
                                frontend at runtime, without VITE_DO_NOT_TRACK
@@ -350,6 +361,13 @@ ROUTING:
  *   `agent-server-config.ts` so pre-built frontend bundles can hide manual
  *   backend setup and the custom Cloud URL field at runtime.
  *
+ * - `defaultBackendName`: the display name for the backend the frontend
+ *   seeds for this origin when a session key is injected, exposed as
+ *   `window.__AGENT_CANVAS_DEFAULT_BACKEND_NAME__`. Read by
+ *   `getDefaultBackendName()` in `agent-server-config.ts`; absent means the
+ *   stock "Local". Lets a hosted deployment show its own name in the
+ *   backend list instead of relabelling the entry by hand in every browser.
+ *
  * - `basePath`: the path prefix the SPA is mounted under, exposed as
  *   `window.__AGENT_CANVAS_BASE_PATH__` so runtime static assets like locale
  *   files can resolve through the same subpath as the built bundle.
@@ -383,6 +401,7 @@ function makeConfigInjectionScript(
   basePath,
   vscodeBasePath,
   disableTelemetry,
+  defaultBackendName,
 ) {
   const parts = [];
 
@@ -426,6 +445,12 @@ function makeConfigInjectionScript(
     );
   }
 
+  if (defaultBackendName) {
+    parts.push(
+      `window.__AGENT_CANVAS_DEFAULT_BACKEND_NAME__=${serializeForInlineScript(defaultBackendName)};`,
+    );
+  }
+
   if (basePath && basePath !== "/") {
     parts.push(
       `window.__AGENT_CANVAS_BASE_PATH__=${serializeForInlineScript(basePath)};`,
@@ -463,6 +488,7 @@ async function serveInjectedIndexHtml(
     basePath,
     vscodeBasePath,
     disableTelemetry,
+    defaultBackendName,
   } = {},
 ) {
   let content;
@@ -480,6 +506,7 @@ async function serveInjectedIndexHtml(
     basePath,
     vscodeBasePath,
     disableTelemetry,
+    defaultBackendName,
   );
   // Inject right before </head> so the key is available before any app code runs.
   // replace() targets the first (and only) </head> in well-formed HTML.
@@ -528,6 +555,7 @@ function needsRuntimeInjection(injectionOpts) {
     injectionOpts.authRequired ||
     injectionOpts.runtimeServicesInfo ||
     injectionOpts.lockToCloud ||
+    injectionOpts.defaultBackendName ||
     injectionOpts.vscodeBasePath ||
     injectionOpts.disableTelemetry ||
     (injectionOpts.basePath && injectionOpts.basePath !== "/"),
@@ -681,6 +709,7 @@ export function startStaticServer(config) {
     authRequired: policy.authRequired,
     runtimeServicesInfo: config.runtimeServicesInfo || null,
     lockToCloud: config.lockToCloud || null,
+    defaultBackendName: config.defaultBackendName || null,
     basePath: normalizeBasePath(config.basePath),
     vscodeBasePath: config.vscodeBasePath || null,
     disableTelemetry: config.disableTelemetry || false,
@@ -779,6 +808,9 @@ export function startStaticServer(config) {
       }
       if (config.lockToCloud) {
         console.log(`  Backend setup locked to Cloud: ${config.lockToCloud}`);
+      }
+      if (config.defaultBackendName) {
+        console.log(`  Seeded backend name: ${config.defaultBackendName}`);
       }
       console.log("  * (default) -> static files + SPA fallback");
       console.log("");

@@ -39,6 +39,9 @@
 #                          the session API key)
 #   MARS_TOKEN           – DigitalOcean personal access token to sign the bridge
 #                          in with at start (needs MARS_WEB=1)
+#   AGENT_CANVAS_DEFAULT_BACKEND_NAME – Display name for the backend the
+#                          frontend seeds for this origin (default "Local");
+#                          read by static-server.mjs directly.
 #   AGENT_CANVAS_ALLOW_LAN_SESSION_KEY – Set to true only when the published
 #                          host port is restricted to loopback and you accept
 #                          embedding the session key in the served HTML

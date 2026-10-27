@@ -2,6 +2,7 @@ import {
   getAgentServerBaseUrl,
   getAgentServerSessionApiKey,
   getCookieAuthCloudHost,
+  getDefaultBackendName,
   getLockedCloudHost,
 } from "../agent-server-config";
 import type { Backend } from "./types";
@@ -62,7 +63,9 @@ export function makeDefaultLocalBackend(): Backend | null {
 
   return {
     id: SEEDED_DEFAULT_BACKEND_ID,
-    name: DEFAULT_LOCAL_BACKEND_NAME,
+    // The launcher may name the seeded entry (a hosted deployment showing
+    // its own name); otherwise the stock "Local".
+    name: getDefaultBackendName() ?? DEFAULT_LOCAL_BACKEND_NAME,
     host,
     apiKey,
     kind: "local",
